@@ -1,3 +1,4 @@
 outputs/
+pipeline_runs/
 __pycache__/
 .ipynb_checkpoints/

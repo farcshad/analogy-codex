@@ -39,6 +39,19 @@ Outputs are ignored by Git. Use `experiment.ipynb` for an editable notebook
 workflow. Qwen thinking mode is off by default because the experiment asks for
 a short JSON answer; enable it explicitly only when testing that variable.
 
+## Resumable pipeline (one file per condition)
+
+Use `pipeline.ipynb` for full experiments. It mirrors the API pipeline format
+and writes one file per condition to `gpu_experiments/pipeline_runs/`. The first
+JSONL record is immutable experiment metadata and each later record is a result.
+Successful rows are skipped on rerun, failed rows are retried, and increasing
+`NUM_ROWS` processes only the additional aligned questions.
+
+`MAX_CONCURRENCY = None` enables automatic maximum batching. The pipeline first
+tries all pending prompts together and halves the batch only when CUDA reports
+out-of-memory. Set a positive integer to impose a known-safe upper limit. The
+model is loaded once and the discovered batch limit is shared across conditions.
+
 ## Useful loader options
 
 - `dtype="bfloat16"` is the default; use `float16` if the GPU lacks BF16 support.
