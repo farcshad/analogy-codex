@@ -1,0 +1,40 @@
+[
+  {
+    "status": "already_successful"
+  },
+  {
+    "status": "already_successful"
+  },
+  {
+    "status": "already_successful"
+  },
+  {
+    "status": "unrecoverable",
+    "request_key": "c0:rec0LlchAeJwY28ZY",
+    "reason": "No saved attempt contains a complete explicit choice field"
+  },
+  {
+    "status": "unrecoverable",
+    "request_key": "c0:rec0OlNe6zQJU1ps4",
+    "reason": "No saved attempt contains a complete explicit choice field"
+  },
+  {
+    "status": "unrecoverable",
+    "request_key": "c0:rec0VuKUjt1SZ7NYv",
+    "reason": "No saved attempt contains a complete explicit choice field"
+  },
+  {
+    "status": "unrecoverable",
+    "request_key": "c0:rec0Y0PY1lx8aZPZh",
+    "reason": "No saved attempt contains a complete explicit choice field"
+  },
+  {
+    "status": "already_successful"
+  },
+  {
+    "status": "already_successful"
+  },
+  {
+    "status": "already_successful"
+  }
+]

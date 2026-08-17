@@ -1,0 +1,16 @@
+{
+  "requested": 10,
+  "successful": 9,
+  "failed": 1,
+  "correct": 7,
+  "accuracy": 0.7777777777777778,
+  "failure_rate": 0.1,
+  "recovered_after_retry": 0,
+  "by_condition": {
+    "6": {
+      "successful": 9,
+      "correct": 7,
+      "accuracy": 0.7777777777777778
+    }
+  }
+}

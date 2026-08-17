@@ -1,0 +1,14 @@
+{
+  "requested": 1,
+  "successful": 1,
+  "failed": 0,
+  "correct": 1,
+  "accuracy": 1.0,
+  "by_condition": {
+    "0": {
+      "successful": 1,
+      "correct": 1,
+      "accuracy": 1.0
+    }
+  }
+}

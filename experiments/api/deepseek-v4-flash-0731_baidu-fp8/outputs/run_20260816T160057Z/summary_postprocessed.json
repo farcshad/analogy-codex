@@ -1,0 +1,17 @@
+{
+  "requested": 10,
+  "successful": 9,
+  "failed": 1,
+  "correct": 4,
+  "accuracy": 0.4444444444444444,
+  "failure_rate": 0.1,
+  "postprocessed_repaired": 1,
+  "postprocessed_unrecoverable": 1,
+  "by_condition": {
+    "2": {
+      "successful": 9,
+      "correct": 4,
+      "accuracy": 0.4444444444444444
+    }
+  }
+}

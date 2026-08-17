@@ -1,0 +1,36 @@
+[
+  {
+    "status": "already_successful"
+  },
+  {
+    "status": "already_successful"
+  },
+  {
+    "status": "already_successful"
+  },
+  {
+    "status": "repaired",
+    "request_key": "c6:rec0LlchAeJwY28ZY",
+    "attempt_index": 0,
+    "method": "control_character_repair",
+    "prediction": "C"
+  },
+  {
+    "status": "already_successful"
+  },
+  {
+    "status": "already_successful"
+  },
+  {
+    "status": "already_successful"
+  },
+  {
+    "status": "already_successful"
+  },
+  {
+    "status": "already_successful"
+  },
+  {
+    "status": "already_successful"
+  }
+]
