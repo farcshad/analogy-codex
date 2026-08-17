@@ -1,4 +1,6 @@
+# Scratch outputs
 outputs/
-pipeline_runs/
+
+# Python cache & notebook checkpoints
 __pycache__/
 .ipynb_checkpoints/
