@@ -52,6 +52,10 @@ tries all pending prompts together and halves the batch only when CUDA reports
 out-of-memory. Set a positive integer to impose a known-safe upper limit. The
 model is loaded once and the discovered batch limit is shared across conditions.
 
+Thinking-enabled pipeline runs automatically use a `__thinking-on` filename
+suffix. Baseline filenames remain unchanged, so enabling thinking never mixes
+with or overwrites the non-thinking results.
+
 ## Useful loader options
 
 - `dtype="bfloat16"` is the default; use `float16` if the GPU lacks BF16 support.

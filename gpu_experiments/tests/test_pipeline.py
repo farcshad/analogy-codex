@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from gpu_experiments.model_loader import ModelConfig
-from gpu_experiments.pipeline import run_pipeline
+from gpu_experiments.pipeline import PipelineConfig, _default_output_file, run_pipeline
 
 
 def response(choice="A", batch_size=1):
@@ -21,6 +21,31 @@ def response(choice="A", batch_size=1):
 class LocalPipelineTests(unittest.TestCase):
     def setUp(self):
         self.repo_root = Path(__file__).resolve().parents[2]
+
+    def test_thinking_mode_gets_separate_default_filename(self):
+        common = dict(
+            teacher_model="deepseek-v4-flash",
+            model=ModelConfig(),
+            condition_ids=(0,),
+            start_row=0,
+            temperature=0.0,
+            top_p=0.95,
+            max_new_tokens=1024,
+        )
+        baseline = _default_output_file(
+            self.repo_root, PipelineConfig(enable_thinking=False, **common)
+        )
+        thinking = _default_output_file(
+            self.repo_root, PipelineConfig(enable_thinking=True, **common)
+        )
+        self.assertEqual(
+            baseline.name,
+            "teacher-deepseek-v4-flash__student-Qwen-Qwen3-0.6B_condition_0.jsonl",
+        )
+        self.assertEqual(
+            thinking.name,
+            "teacher-deepseek-v4-flash__student-Qwen-Qwen3-0.6B__thinking-on_condition_0.jsonl",
+        )
 
     def test_multiple_conditions_write_separate_resumable_files(self):
         with tempfile.TemporaryDirectory() as temporary:

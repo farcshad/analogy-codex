@@ -67,9 +67,11 @@ def _fingerprint(config: PipelineConfig) -> str:
 
 def _default_output_file(root: Path, config: PipelineConfig) -> Path:
     condition_id = config.condition_ids[0]
+    thinking_suffix = "__thinking-on" if config.enable_thinking else ""
     name = (
         f"teacher-{_slug(config.teacher_model)}__"
-        f"student-{_slug(config.model.model_id)}_condition_{condition_id}.jsonl"
+        f"student-{_slug(config.model.model_id)}{thinking_suffix}"
+        f"_condition_{condition_id}.jsonl"
     )
     return root / "gpu_experiments" / "pipeline_runs" / name
 
