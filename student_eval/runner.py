@@ -111,13 +111,17 @@ def run_experiment(
             max_retries=config.max_retries,
             final_answer_retries=config.final_answer_retries,
             max_recovery_tokens=config.max_recovery_tokens,
+            condition_id=task["condition_id"],
         )
         predicted = response["parsed"]["choice"]
         return {
             **{key: task[key] for key in (
                 "request_key", "condition_id", "condition_file", "id",
                 "question_stem", "choices", "answer_key", "scientific_concept",
-                "content_column", "teaching_content",
+                "content_column", "teaching_content", "question_domain",
+                "analogy_source_id", "analogy_source_question_stem",
+                "analogy_source_domain", "analogy_assignment_condition",
+                "analogy_shuffle_seed",
             )},
             "prompt": build_scua_prompt(task),
             "prediction": predicted,
@@ -149,7 +153,10 @@ def run_experiment(
                     **{key: task[key] for key in (
                         "request_key", "condition_id", "condition_file", "id",
                         "question_stem", "choices", "answer_key", "scientific_concept",
-                        "content_column", "teaching_content",
+                        "content_column", "teaching_content", "question_domain",
+                        "analogy_source_id", "analogy_source_question_stem",
+                        "analogy_source_domain", "analogy_assignment_condition",
+                        "analogy_shuffle_seed",
                     )},
                     "prediction": None,
                     "reason": None,

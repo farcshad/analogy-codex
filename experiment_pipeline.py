@@ -503,7 +503,10 @@ def _run_single_condition(
     task_fields = (
         "request_key", "condition_id", "condition_file", "id", "question_stem",
         "choices", "answer_key", "scientific_concept", "teacher_model",
-        "content_column", "teaching_content",
+        "content_column", "teaching_content", "question_domain",
+        "analogy_source_id", "analogy_source_question_stem",
+        "analogy_source_domain", "analogy_assignment_condition",
+        "analogy_shuffle_seed",
     )
     provider_router = _ProviderFallbackRouter(providers, provider_cooldown_seconds)
 
@@ -521,9 +524,12 @@ def _run_single_condition(
             response_format_used = None
             for selected_provider in candidates:
                 provider_exc = None
-                for response_format_mode in provider_router.response_formats(
-                    selected_provider
-                ):
+                response_formats = (
+                    ("text",)
+                    if task["condition_id"] == 20
+                    else provider_router.response_formats(selected_provider)
+                )
+                for response_format_mode in response_formats:
                     try:
                         response = chat_completion(
                             api_key=api_key,
@@ -541,6 +547,7 @@ def _run_single_condition(
                             retry_rate_limits=False,
                             require_provider_parameters=require_provider_parameters,
                             response_format_mode=response_format_mode,
+                            condition_id=task["condition_id"],
                         )
                         response_format_used = response_format_mode
                         provider_attempts.append(

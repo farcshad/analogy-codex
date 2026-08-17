@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from student_eval.conditions import load_tasks
-from student_eval.openrouter import parse_student_answer
+from student_eval.openrouter import parse_task_answer
 from student_eval.prompting import build_scua_prompt
 
 from .inference import GenerationConfig, generate_batch
@@ -57,7 +57,10 @@ def _base_result(task: dict[str, Any]) -> dict[str, Any]:
     keys = (
         "request_key", "condition_id", "condition_file", "id",
         "question_stem", "choices", "answer_key", "scientific_concept",
-        "content_column", "teaching_content",
+        "content_column", "teaching_content", "question_domain",
+        "analogy_source_id", "analogy_source_question_stem",
+        "analogy_source_domain", "analogy_assignment_condition",
+        "analogy_shuffle_seed",
     )
     return {key: task[key] for key in keys}
 
@@ -135,7 +138,9 @@ def run_experiment(
                     raise RuntimeError("Generation returned the wrong number of responses")
                 for task, prompt, response in zip(batch, prompts, responses):
                     try:
-                        parsed = parse_student_answer(response["text"])
+                        parsed = parse_task_answer(
+                            response["text"], task["condition_id"]
+                        )
                         prediction = parsed["choice"]
                         row = {
                             **_base_result(task),

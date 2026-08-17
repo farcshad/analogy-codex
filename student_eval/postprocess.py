@@ -6,7 +6,7 @@ import json
 from copy import deepcopy
 from pathlib import Path
 
-from .openrouter import parse_student_answer
+from .openrouter import parse_task_answer
 
 
 def _write_json(path: Path, payload: object) -> None:
@@ -80,7 +80,7 @@ def repair_result_row(row: dict) -> tuple[dict, dict]:
     for attempt_index, attempt in enumerate(row.get("attempts", [])):
         raw = attempt.get("raw_response") or ""
         try:
-            parsed = parse_student_answer(raw)
+            parsed = parse_task_answer(raw, row.get("condition_id"))
         except ValueError:
             continue
 

@@ -15,7 +15,15 @@ CONDITION_FILES = {
     4: "4_GPQA_free-form-3x200w_deepseek-v4-flash_clean.csv",
     5: "5_GPQA_cot-300w_deepseek-v4-flash_clean.csv",
     6: "6_GPQA_cot-600w_deepseek-v4-flash_clean.csv",
+    7: "7_GPQA_same_domain_random_analogy.csv",
+    8: "8_GPQA_cross_domain_random_analogy.csv",
+    20: "20_GPQA_cot_baseline_no_external_teaching",
 }
+
+# Condition 20 is a prompt-only baseline. It uses the aligned GPQA questions
+# from condition 0 but does not expose that condition's analogy to the student.
+COT_BASELINE_CONDITION_ID = 20
+COT_BASELINE_SOURCE_FILE = CONDITION_FILES[0]
 
 
 def _teaching_content(row: dict[str, str]) -> tuple[str, str]:
@@ -53,7 +61,12 @@ def load_tasks(
     for condition_id in condition_ids:
         if condition_id not in CONDITION_FILES:
             raise KeyError(f"Unknown condition ID: {condition_id}")
-        path = repo_root / "content conditions" / CONDITION_FILES[condition_id]
+        source_filename = (
+            COT_BASELINE_SOURCE_FILE
+            if condition_id == COT_BASELINE_CONDITION_ID
+            else CONDITION_FILES[condition_id]
+        )
+        path = repo_root / "content conditions" / source_filename
         with path.open(encoding="utf-8-sig", newline="") as handle:
             rows = sorted(csv.DictReader(handle), key=lambda row: row["id"])
         by_id = {row["id"]: row for row in rows}
@@ -66,12 +79,18 @@ def load_tasks(
 
         for row_id in selected_ids:
             row = by_id[row_id]
-            content_column, content = _teaching_content(row)
+            if condition_id == COT_BASELINE_CONDITION_ID:
+                content_column, content = None, ""
+                condition_file = "20_GPQA_cot_baseline_no_external_teaching"
+            else:
+                content_column, content = _teaching_content(row)
+                condition_file = path.name
             tasks.append(
                 {
                     "request_key": f"c{condition_id}:{row_id}",
                     "condition_id": condition_id,
-                    "condition_file": path.name,
+                    "condition_file": condition_file,
+                    "source_condition_file": path.name,
                     "id": row_id,
                     "question_stem": row["question_stem"].strip(),
                     "choices": row["choices"].strip(),
@@ -80,6 +99,20 @@ def load_tasks(
                     "teacher_model": row["teacher_model"].strip(),
                     "content_column": content_column,
                     "teaching_content": content,
+                    "question_domain": (row.get("domain") or "").strip(),
+                    "analogy_source_id": (row.get("analogy_source_id") or "").strip(),
+                    "analogy_source_question_stem": (
+                        row.get("analogy_source_question_stem") or ""
+                    ).strip(),
+                    "analogy_source_domain": (
+                        row.get("analogy_source_domain") or ""
+                    ).strip(),
+                    "analogy_assignment_condition": (
+                        row.get("analogy_assignment_condition") or ""
+                    ).strip(),
+                    "analogy_shuffle_seed": (
+                        row.get("analogy_shuffle_seed") or ""
+                    ).strip(),
                 }
             )
     return tasks

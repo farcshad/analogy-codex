@@ -56,6 +56,20 @@ Thinking-enabled pipeline runs automatically use a `__thinking-on` filename
 suffix. Baseline filenames remain unchanged, so enabling thinking never mixes
 with or overwrites the non-thinking results.
 
+### Additional controls
+
+- Condition 7: a random analogy borrowed from another GPQA question in the same
+  scientific domain.
+- Condition 8: a random analogy borrowed from a GPQA question in a different
+  scientific domain.
+- Condition 20: no analogy or external explanation. It uses the SCUA paper's
+  Appendix C.4 CoT baseline prompt verbatim and accepts a free-form reason
+  followed by an explicit final answer.
+
+Conditions 7 and 8 preserve the source question, source domain, assignment
+condition, and shuffle seed in every result row for auditing. Condition 20 uses
+the same aligned GPQA question IDs as the other conditions.
+
 ## Useful loader options
 
 - `dtype="bfloat16"` is the default; use `float16` if the GPU lacks BF16 support.

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from student_eval.conditions import load_tasks
-from student_eval.openrouter import parse_student_answer
+from student_eval.openrouter import parse_task_answer
 from student_eval.postprocess import repair_result_row
 from student_eval.prompting import build_scua_prompt
 
@@ -234,7 +234,10 @@ def _base_row(task: dict, config: PipelineConfig) -> dict:
     fields = (
         "request_key", "condition_id", "condition_file", "id", "question_stem",
         "choices", "answer_key", "scientific_concept", "teacher_model",
-        "content_column", "teaching_content",
+        "content_column", "teaching_content", "question_domain",
+        "analogy_source_id", "analogy_source_question_stem",
+        "analogy_source_domain", "analogy_assignment_condition",
+        "analogy_shuffle_seed",
     )
     return {
         "record_type": "result",
@@ -487,7 +490,9 @@ def _run_single_condition(
                         rows = []
                         for task, response in zip(batch, responses):
                             try:
-                                parsed = parse_student_answer(response["text"])
+                                parsed = parse_task_answer(
+                                    response["text"], task["condition_id"]
+                                )
                                 row = _success_row(task, config, response, parsed)
                             except Exception as exc:
                                 row = _failure_row(task, config, exc, response)

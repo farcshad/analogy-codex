@@ -30,6 +30,42 @@ def successful_response(choice="A"):
 
 
 class ResumablePipelineTests(unittest.TestCase):
+    def test_condition_20_uses_text_mode_and_condition_aware_api_parsing(self):
+        repo_root = Path(__file__).resolve().parents[1]
+        old_key = os.environ.get("OPENROUTER_API_KEY")
+        os.environ["OPENROUTER_API_KEY"] = "test-key"
+        calls = []
+
+        def fake_completion(**kwargs):
+            calls.append(kwargs)
+            response = successful_response(choice="B")
+            response["parsed"]["choice"] = "B"
+            response["raw_response"] = "Reasoning first. Final answer is B."
+            return response
+
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                with patch("experiment_pipeline.chat_completion", side_effect=fake_completion):
+                    summary = run_pipeline(
+                        teacher_model="deepseek-v4-flash",
+                        student_model="test/student",
+                        provider="test/provider",
+                        condition=20,
+                        num_rows=1,
+                        concurrency=1,
+                        output_file=Path(temp_dir) / "condition20.jsonl",
+                        repo_root=repo_root,
+                        show_progress=False,
+                    )
+            self.assertEqual(summary["successful"], 1)
+            self.assertEqual(calls[0]["condition_id"], 20)
+            self.assertEqual(calls[0]["response_format_mode"], "text")
+        finally:
+            if old_key is None:
+                os.environ.pop("OPENROUTER_API_KEY", None)
+            else:
+                os.environ["OPENROUTER_API_KEY"] = old_key
+
     def test_rate_limit_falls_back_to_next_provider(self):
         repo_root = Path(__file__).resolve().parents[1]
         old_key = os.environ.get("OPENROUTER_API_KEY")

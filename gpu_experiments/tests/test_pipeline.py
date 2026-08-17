@@ -6,6 +6,9 @@ from unittest.mock import patch
 
 from gpu_experiments.model_loader import ModelConfig
 from gpu_experiments.pipeline import PipelineConfig, _default_output_file, run_pipeline
+from student_eval.conditions import load_tasks
+from student_eval.openrouter import parse_task_answer
+from student_eval.prompting import build_scua_prompt
 
 
 def response(choice="A", batch_size=1):
@@ -46,6 +49,41 @@ class LocalPipelineTests(unittest.TestCase):
             thinking.name,
             "teacher-deepseek-v4-flash__student-Qwen-Qwen3-0.6B__thinking-on_condition_0.jsonl",
         )
+
+    def test_random_analogy_conditions_expose_assignment_provenance(self):
+        same_domain, cross_domain = load_tasks(
+            self.repo_root, (7, 8), num_rows=1
+        )
+        self.assertEqual(
+            same_domain["analogy_assignment_condition"],
+            "same_domain_random_analogy",
+        )
+        self.assertEqual(same_domain["question_domain"], same_domain["analogy_source_domain"])
+        self.assertEqual(
+            cross_domain["analogy_assignment_condition"],
+            "cross_domain_random_analogy",
+        )
+        self.assertNotEqual(cross_domain["question_domain"], cross_domain["analogy_source_domain"])
+
+    def test_condition_20_uses_exact_paper_cot_prompt_without_teaching(self):
+        task = load_tasks(self.repo_root, (20,), num_rows=1)[0]
+        prompt = build_scua_prompt(task)
+        expected = (
+            f"{task['question_stem']}\n{task['choices']}\n"
+            "You need to give the reason first and then choose the answer.\n"
+            "Answer:"
+        )
+        self.assertEqual(prompt, expected)
+        self.assertEqual(task["teaching_content"], "")
+        self.assertNotIn("teacher", prompt.lower())
+        self.assertNotIn("analogy", prompt.lower())
+
+    def test_condition_20_parses_free_form_cot_final_answer(self):
+        parsed = parse_task_answer(
+            "First, eliminate A and C. Therefore, the final answer is B.", 20
+        )
+        self.assertEqual(parsed["choice"], "B")
+        self.assertEqual(parsed["parse_method"], "explicit_cot_answer")
 
     def test_multiple_conditions_write_separate_resumable_files(self):
         with tempfile.TemporaryDirectory() as temporary:

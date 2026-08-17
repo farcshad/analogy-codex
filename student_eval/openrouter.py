@@ -108,6 +108,51 @@ def parse_student_answer(text: str) -> dict[str, str]:
     raise ValueError("Response does not contain a complete explicit choice field")
 
 
+def parse_cot_answer(text: str) -> dict[str, str]:
+    """Parse the free-form answer produced by the paper's CoT baseline prompt."""
+    try:
+        return parse_student_answer(text)
+    except ValueError:
+        pass
+
+    cleaned = text.strip()
+    explicit = list(
+        re.finditer(
+            r"(?i)\b(?:final\s+answer|answer|choice|option)"
+            r"(?:\s+is)?\s*[:=\-]?\s*(?:\*\*)?\(?([ABCD])\)?(?:\*\*)?\b",
+            cleaned,
+        )
+    )
+    if explicit:
+        match = explicit[-1]
+        reason = cleaned[: match.start()].strip()
+        return {
+            "reason": reason,
+            "choice": match.group(1).upper(),
+            "parse_method": "explicit_cot_answer",
+            "parse_repaired": False,
+        }
+
+    terminal = re.search(
+        r"(?i)(?:^|\n)\s*(?:\*\*)?\(?([ABCD])\)?(?:\*\*)?[\s.!]*$", cleaned
+    )
+    if terminal:
+        return {
+            "reason": cleaned[: terminal.start()].strip(),
+            "choice": terminal.group(1).upper(),
+            "parse_method": "terminal_cot_choice",
+            "parse_repaired": False,
+        }
+    raise ValueError("CoT response does not contain an explicit final answer")
+
+
+def parse_task_answer(text: str, condition_id: int | None) -> dict[str, str]:
+    """Use the parser appropriate for a condition's required output format."""
+    if condition_id == 20:
+        return parse_cot_answer(text)
+    return parse_student_answer(text)
+
+
 def chat_completion(
     *,
     api_key: str,
@@ -125,6 +170,7 @@ def chat_completion(
     retry_rate_limits: bool = True,
     require_provider_parameters: bool = True,
     response_format_mode: str = "json_schema",
+    condition_id: int | None = None,
 ) -> dict:
     """Call one endpoint and recover when reasoning consumes the output budget."""
     if max_recovery_tokens < max_tokens:
@@ -174,7 +220,11 @@ def chat_completion(
                 "require_parameters": require_provider_parameters,
             },
         }
-        if response_format_mode == "json_schema":
+        # Appendix C.4's CoT baseline is deliberately free-form. Do not impose
+        # provider-side JSON formatting, which would change the paper prompt.
+        if condition_id == 20:
+            pass
+        elif response_format_mode == "json_schema":
             body["response_format"] = schema
         elif response_format_mode == "json_object":
             body["response_format"] = {"type": "json_object"}
@@ -231,7 +281,7 @@ def chat_completion(
         try:
             message = payload["choices"][0]["message"]
             raw_text = _content_as_text(message.get("content"))
-            parsed = parse_student_answer(raw_text)
+            parsed = parse_task_answer(raw_text, condition_id)
         except (ValueError, KeyError, TypeError) as exc:
             usage = (payload or {}).get("usage", {})
             generation_attempts.append(
