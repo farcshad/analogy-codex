@@ -1,0 +1,6 @@
+# Install a CUDA-compatible PyTorch build for your server first:
+# https://pytorch.org/get-started/locally/
+transformers>=4.51.0,<6
+accelerate>=1.2,<2
+safetensors>=0.4.3
+jupyterlab>=4,<5
