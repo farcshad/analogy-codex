@@ -54,4 +54,20 @@ then you copy this command and enter it in tmux terminal.
 
 nvidia-smi
 how to kill all the gpu sessions
-kill -9 python
+dkill -9 python
+
+
+
+
+
+Experiment running
+      ↓
+Ctrl+B
+release
+D
+      ↓
+[detached from run1_7]
+      ↓
+tmux ls   ← optional safety check
+      ↓
+Turn laptop off
