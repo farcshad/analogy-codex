@@ -4,9 +4,10 @@ import { Workbook } from "@oai/artifact-tool";
 
 const repoRoot = path.resolve("../..");
 const outputDir = path.join(repoRoot, "reports");
+const conditionId = 3;
 const conditionPath = path.join(
   repoRoot,
-  "gpu_experiments/pipeline_runs/teacher-deepseek-v4-flash__student-Qwen-Qwen3-0.6B_condition_4.jsonl",
+  `gpu_experiments/pipeline_runs/teacher-deepseek-v4-flash__student-Qwen-Qwen3-0.6B_condition_${conditionId}.jsonl`,
 );
 const baselinePath = path.join(
   repoRoot,
@@ -70,14 +71,11 @@ const headers = [
   "question_stem",
   "choices",
   "answer_key",
-  "teaching_content_3x200",
+  "teaching_content_2x300",
   "qwen_prediction",
   "qwen_reason",
   "qwen_is_correct",
   "explicit_analogy_use",
-  "source_title_overlap_count",
-  "source_title_overlap_terms",
-  "strong_mapping_evidence_ge_2_terms",
   "baseline_answer_available",
   "baseline_prediction",
   "baseline_reason",
@@ -89,7 +87,6 @@ const headers = [
 
 const data = selected.map((row) => {
   const baseline = baselineById.get(row.id);
-  const overlaps = sourceTitleOverlap(row);
   const outcome = transition(row.is_correct, baseline);
   return [
     row.request_key,
@@ -103,9 +100,6 @@ const data = selected.map((row) => {
     row.reason || "",
     row.is_correct,
     true,
-    overlaps.length,
-    overlaps.join(" | "),
-    overlaps.length >= 2,
     Boolean(baseline),
     baseline?.prediction || "",
     baseline?.reason || "",
@@ -115,8 +109,6 @@ const data = selected.map((row) => {
     outcome === "right_to_wrong",
   ];
 });
-
-if (selected.length !== 200) throw new Error(`Expected 200 selected answers; found ${selected.length}`);
 
 // Build an in-memory spreadsheet for structural and visual QA before CSV export.
 const workbook = Workbook.create();
@@ -132,18 +124,18 @@ sheet.getRangeByIndexes(0, 0, 1, headers.length).format = {
 };
 sheet.getRangeByIndexes(1, 0, data.length, headers.length).format.wrapText = true;
 sheet.getRange("A:U").format.autofitColumns();
-for (const col of [2, 3, 4, 6, 8, 12, 16, 18]) {
+for (const col of [2, 3, 4, 6, 8, 13, 15]) {
   sheet.getRangeByIndexes(0, col, data.length + 1, 1).format.columnWidth = col === 6 ? 55 : 32;
 }
 sheet.getRangeByIndexes(1, 0, data.length, headers.length).format.rowHeight = 48;
-sheet.tables.add(`A1:U${data.length + 1}`, true, "QwenAnalogyUseTable");
+sheet.tables.add(`A1:R${data.length + 1}`, true, "QwenAnalogyUseTable");
 
 const inspection = await workbook.inspect({
   kind: "table",
-  range: "'Analogy-use answers'!A1:U6",
+  range: "'Analogy-use answers'!A1:R6",
   include: "values,formulas",
   tableMaxRows: 6,
-  tableMaxCols: 21,
+  tableMaxCols: 18,
   maxChars: 6000,
 });
 console.log(inspection.ndjson);
@@ -158,7 +150,7 @@ console.log(errors.ndjson);
 
 const preview = await workbook.render({
   sheetName: "Analogy-use answers",
-  range: "A1:U8",
+  range: "A1:R8",
   scale: 1,
   format: "png",
 });
@@ -172,11 +164,50 @@ function csvCell(value) {
 
 const csv = [headers, ...data].map((row) => row.map(csvCell).join(",")).join("\r\n") + "\r\n";
 await fs.mkdir(outputDir, { recursive: true });
-const csvPath = path.join(outputDir, "qwen3_0.6b_no_thinking_condition4_analogy_use_200.csv");
+const csvPath = path.join(outputDir, `qwen3_0.6b_no_thinking_condition${conditionId}_2x300_explicit_analogy_use.csv`);
 await fs.writeFile(csvPath, `\uFEFF${csv}`, "utf8");
 
 const counts = data.reduce((acc, row) => {
-  acc[row[18]] = (acc[row[18]] || 0) + 1;
+  acc[row[15]] = (acc[row[15]] || 0) + 1;
   return acc;
 }, {});
-console.log(JSON.stringify({ csvPath, rows: data.length, transitions: counts }, null, 2));
+function choose(n, k) {
+  if (k < 0 || k > n) return 0;
+  k = Math.min(k, n - k);
+  let value = 1;
+  for (let i = 1; i <= k; i += 1) value = (value * (n - k + i)) / i;
+  return value;
+}
+
+function exactTwoSided(wins, losses) {
+  const n = wins + losses;
+  if (!n) return 1;
+  const k = Math.min(wins, losses);
+  let lowerTail = 0;
+  for (let j = 0; j <= k; j += 1) lowerTail += choose(n, j) / 2 ** n;
+  return Math.min(1, 2 * lowerTail);
+}
+
+function summarizeSubset(rows) {
+  const out = { wrong_to_right: 0, right_to_wrong: 0, both_right: 0, both_wrong: 0, baseline_unavailable: 0 };
+  for (const row of rows) out[transition(row.is_correct, baselineById.get(row.id))] += 1;
+  const paired = rows.length - out.baseline_unavailable;
+  return {
+    selected: rows.length,
+    paired,
+    transitions: out,
+    condition_correct_paired: out.wrong_to_right + out.both_right,
+    baseline_correct_paired: out.right_to_wrong + out.both_right,
+    net_correct: out.wrong_to_right - out.right_to_wrong,
+    exact_p: exactTwoSided(out.wrong_to_right, out.right_to_wrong),
+  };
+}
+
+const summary = {
+  csvPath,
+  condition_valid_answers: conditionRows.length,
+  condition_correct: conditionRows.filter((row) => row.is_correct).length,
+  explicit_analogy: summarizeSubset(selected),
+  overall_paired: summarizeSubset(conditionRows),
+};
+console.log(JSON.stringify(summary, null, 2));
