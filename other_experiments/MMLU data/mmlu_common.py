@@ -218,7 +218,7 @@ def build_student_prompt(task: dict) -> str:
     if task["condition_id"] == 20:
         return (
             f"{task['question_stem']}\n{task['choices']}\n"
-            "You need to give the reason first and then choose the answer.\nAnswer:"
+            "You need to give a brief, concise reason first (no more than 80 words) and then state your final answer choice (e.g. Answer: A).\nAnswer:"
         )
     return f"""
 You need to select the best answer for a multiple-choice scientific question.
@@ -255,9 +255,11 @@ def parse_student_answer(text: str, condition_id: int) -> dict[str, str]:
         except json.JSONDecodeError:
             pass
     patterns = [
+        r'(?i)(?:\b(?:final\s+answer|the\s+correct\s+answer|correct\s+answer|answer)\b[\s\*\:\-=]*(?:is)?[\s\*\:\-=]*)\(?([ABCD])\)?(?:\b|[\:\.\s\*\)])',
         r'(?i)["\']?choice["\']?\s*[:=]\s*["\']?([ABCD])\b',
-        r"(?i)(?:final\s+answer|answer|option|choice)\s*(?:is|:|=)?\s*\(?([ABCD])\)?\b",
-        r"(?i)(?:^|\n)\s*\(?([ABCD])\)?[.)\s]*$",
+        r'(?i)\b(?:option|choice)\s*[:=]\s*(?:\*\*)?\(?([ABCD])\)?(?:\*\*)?\b',
+        r'(?i)(?:best\s+(?:choice|option)|answer\s+is|choice\s+is|option\s+is)\s*(?:\*\*)?\(?([ABCD])\)?(?:\*\*)?\b',
+        r'(?i)(?:^|\n)\s*(?:\*\*)?\(?([ABCD])\)?(?:\*\*)?[\s.:)]*$',
     ]
     for pattern in patterns:
         matches = list(re.finditer(pattern, cleaned))
