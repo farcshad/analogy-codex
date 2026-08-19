@@ -26,8 +26,8 @@ No notebook contains executed API calls or outputs. Copy `.env.example` to
 
 | ID | Teacher material |
 |---:|---|
-| 0 | One free-form analogy, at most 300 words, from a detailed concept |
-| 1 | One free-form analogy, at most 300 words, from a compact concept |
+| 0 | One free-form analogy, at most 300 words |
+| 1 | One free-form analogy, at most 300 words |
 | 2 | One free-form analogy, at most 600 words |
 | 3 | Two distinct analogies, at most 300 words each |
 | 4 | Three distinct analogies, at most 200 words each |
@@ -39,3 +39,6 @@ No notebook contains executed API calls or outputs. Copy `.env.example` to
 
 Generated data stays below this directory in `data/`, `content_conditions/`,
 `generation_runs/`, and `pipeline_runs/`.
+
+All conditions use the same concise extracted concept for a given question.
+Only the teacher-material format and length change across conditions.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import random
 import re
@@ -35,6 +36,7 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 TEACHER_MODEL_ID = "deepseek/deepseek-v4-flash-0731"
 TEACHER_LABEL = "deepseek-v4-flash"
 RANDOM_ANALOGY_SEED = 42
+SHARED_CONCEPT_MODE = "compact"
 
 
 def _default_teacher_label(model_id: str) -> str:
@@ -45,13 +47,15 @@ def _default_teacher_label(model_id: str) -> str:
 
 
 CONDITION_SPECS = {
-    0: {"concept_mode": "detailed", "kind": "analogy", "word_limit": 300, "count": 1, "prompt_key": "scua_default", "max_tokens": 512},
-    1: {"concept_mode": "compact", "kind": "analogy", "word_limit": 300, "count": 1, "prompt_key": "scua_default", "max_tokens": 512},
-    2: {"concept_mode": "compact", "kind": "analogy", "word_limit": 600, "count": 1, "prompt_key": "free_form_600_words", "max_tokens": 1024},
-    3: {"concept_mode": "compact", "kind": "analogy", "word_limit": 300, "count": 2, "prompt_key": "two_analogies_300w_each", "max_tokens": 1024},
-    4: {"concept_mode": "compact", "kind": "analogy", "word_limit": 200, "count": 3, "prompt_key": "three_analogies_200w_each", "max_tokens": 1024},
-    5: {"concept_mode": "compact", "kind": "explanation", "word_limit": 300, "count": 1, "prompt_key": "cot_300_words", "max_tokens": 512},
-    6: {"concept_mode": "compact", "kind": "explanation", "word_limit": 600, "count": 1, "prompt_key": "cot_600_words", "max_tokens": 1024},
+    # Every condition deliberately uses the same compact concept for each
+    # question. This isolates the effect of analogy format/length.
+    0: {"concept_mode": SHARED_CONCEPT_MODE, "kind": "analogy", "word_limit": 300, "count": 1, "prompt_key": "scua_default", "max_tokens": 512},
+    1: {"concept_mode": SHARED_CONCEPT_MODE, "kind": "analogy", "word_limit": 300, "count": 1, "prompt_key": "scua_default", "max_tokens": 512},
+    2: {"concept_mode": SHARED_CONCEPT_MODE, "kind": "analogy", "word_limit": 600, "count": 1, "prompt_key": "free_form_600_words", "max_tokens": 1024},
+    3: {"concept_mode": SHARED_CONCEPT_MODE, "kind": "analogy", "word_limit": 300, "count": 2, "prompt_key": "two_analogies_300w_each", "max_tokens": 1024},
+    4: {"concept_mode": SHARED_CONCEPT_MODE, "kind": "analogy", "word_limit": 200, "count": 3, "prompt_key": "three_analogies_200w_each", "max_tokens": 1024},
+    5: {"concept_mode": SHARED_CONCEPT_MODE, "kind": "explanation", "word_limit": 300, "count": 1, "prompt_key": "cot_300_words", "max_tokens": 512},
+    6: {"concept_mode": SHARED_CONCEPT_MODE, "kind": "explanation", "word_limit": 600, "count": 1, "prompt_key": "cot_600_words", "max_tokens": 1024},
 }
 
 # Verbatim prompt registry from analogygenerationoriginal.ipynb. Keep these
@@ -148,6 +152,18 @@ Analogy""",
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _fingerprint(prompt: str) -> str:
+    return hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+
+
+def concept_prompt_fingerprint(mode: str) -> str:
+    return _fingerprint(concept_prompt({"question_stem": "{question}"}, mode))
+
+
+def teaching_prompt_fingerprint(condition_id: int) -> str:
+    return _fingerprint(teaching_prompt("{concept}", condition_id))
 
 
 def openrouter_text(
@@ -301,7 +317,7 @@ def generate_concepts(
     for row in rows:
         for mode in modes:
             request_key = f"{mode}:{row['id']}"
-            if request_key not in existing:
+            if existing.get(request_key, {}).get("prompt_fingerprint") != concept_prompt_fingerprint(mode):
                 jobs.append({"request_key": request_key, "mode": mode, "row": row})
 
     def worker(job: dict) -> dict:
@@ -322,6 +338,7 @@ def generate_concepts(
                 "id": job["row"]["id"],
                 "teacher_model": model,
                 "concept_mode": job["mode"],
+                "prompt_fingerprint": concept_prompt_fingerprint(job["mode"]),
                 "scientific_concept": clean_concept,
                 **response,
                 "completed_at_utc": _utc_now(),
@@ -360,7 +377,11 @@ def generate_condition(
     for row in rows:
         request_key = f"c{condition_id}:{row['id']}"
         concept_key = f"{spec['concept_mode']}:{row['id']}"
-        if request_key not in existing and concept_key in concepts:
+        if (
+            existing.get(request_key, {}).get("prompt_fingerprint")
+            != teaching_prompt_fingerprint(condition_id)
+            and concept_key in concepts
+        ):
             jobs.append({"request_key": request_key, "row": row, "concept": concepts[concept_key]})
 
     def worker(job: dict) -> dict:
@@ -378,6 +399,7 @@ def generate_condition(
                 "request_key": job["request_key"],
                 "condition_id": condition_id,
                 "id": job["row"]["id"],
+                "prompt_fingerprint": teaching_prompt_fingerprint(condition_id),
                 "teacher_model": model,
                 "scientific_concept": job["concept"]["scientific_concept"],
                 "raw_concept_output": job["concept"]["raw_response"],
