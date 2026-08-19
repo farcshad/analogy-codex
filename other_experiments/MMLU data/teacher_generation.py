@@ -366,6 +366,7 @@ def generate_condition(
     *,
     api_key: str,
     model: str = TEACHER_MODEL_ID,
+    teacher_label: str = TEACHER_LABEL,
     provider: str | None,
     concurrency: int,
 ) -> dict[str, dict]:
@@ -373,6 +374,11 @@ def generate_condition(
     append_lock = threading.Lock()
     existing = _successful_latest(path, "request_key")
     spec = CONDITION_SPECS[condition_id]
+
+    # Initialize / materialize output CSV immediately at the start so intermediate
+    # progress is always visible on disk even if the run is interrupted.
+    materialize_condition(condition_id, rows, existing, teacher_label=teacher_label)
+
     jobs = []
     for row in rows:
         request_key = f"c{condition_id}:{row['id']}"
@@ -417,9 +423,13 @@ def generate_condition(
             }
         with append_lock:
             append_jsonl(path, record)
+            if not record.get("error"):
+                existing[record["request_key"]] = record
+                materialize_condition(condition_id, rows, existing, teacher_label=teacher_label)
         return record
 
     _run_jobs(jobs, worker, concurrency=concurrency, description=f"Condition {condition_id}")
+    materialize_condition(condition_id, rows, existing, teacher_label=teacher_label)
     return _successful_latest(path, "request_key")
 
 
@@ -571,6 +581,7 @@ def run_generation_pipeline(
             concepts,
             api_key=api_key,
             model=teacher_model,
+            teacher_label=effective_label,
             provider=provider,
             concurrency=concurrency,
         )
