@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import re
 import threading
 import time
 import urllib.error
@@ -36,13 +37,104 @@ TEACHER_LABEL = "deepseek-v4-flash"
 RANDOM_ANALOGY_SEED = 42
 
 CONDITION_SPECS = {
-    0: {"concept_mode": "detailed", "kind": "analogy", "word_limit": 300, "count": 1},
-    1: {"concept_mode": "compact", "kind": "analogy", "word_limit": 300, "count": 1},
-    2: {"concept_mode": "compact", "kind": "analogy", "word_limit": 600, "count": 1},
-    3: {"concept_mode": "compact", "kind": "analogy", "word_limit": 300, "count": 2},
-    4: {"concept_mode": "compact", "kind": "analogy", "word_limit": 200, "count": 3},
-    5: {"concept_mode": "compact", "kind": "explanation", "word_limit": 300, "count": 1},
-    6: {"concept_mode": "compact", "kind": "explanation", "word_limit": 600, "count": 1},
+    0: {"concept_mode": "detailed", "kind": "analogy", "word_limit": 300, "count": 1, "prompt_key": "scua_default", "max_tokens": 512},
+    1: {"concept_mode": "compact", "kind": "analogy", "word_limit": 300, "count": 1, "prompt_key": "scua_default", "max_tokens": 512},
+    2: {"concept_mode": "compact", "kind": "analogy", "word_limit": 600, "count": 1, "prompt_key": "free_form_600_words", "max_tokens": 1024},
+    3: {"concept_mode": "compact", "kind": "analogy", "word_limit": 300, "count": 2, "prompt_key": "two_analogies_300w_each", "max_tokens": 1024},
+    4: {"concept_mode": "compact", "kind": "analogy", "word_limit": 200, "count": 3, "prompt_key": "three_analogies_200w_each", "max_tokens": 1024},
+    5: {"concept_mode": "compact", "kind": "explanation", "word_limit": 300, "count": 1, "prompt_key": "cot_300_words", "max_tokens": 512},
+    6: {"concept_mode": "compact", "kind": "explanation", "word_limit": 600, "count": 1, "prompt_key": "cot_600_words", "max_tokens": 1024},
+}
+
+# Verbatim prompt registry from analogygenerationoriginal.ipynb. Keep these
+# strings unchanged so MMLU and GPQA teacher generations use identical prompts.
+PROMPT_REGISTRY = {
+    "concept_extraction": {
+        "concise_word_limited": """Given a scientific question, identify the single core scientific concept, law, reaction, or principle required to solve it.
+
+Requirements:
+1. The concept must be a concise title/phrase (strictly between 2 and 6 words maximum).
+2. Do NOT summarize the question, do NOT describe steps, and do NOT write full sentences.
+3. Output ONLY a valid, parsable JSON object.
+
+Example outputs:
+{{"key_scientific_concept": "Corey-Chaykovsky Epoxidation"}}
+{{"key_scientific_concept": "Energy-Time Uncertainty Principle"}}
+{{"key_scientific_concept": "Poincaré Disk Hyperbolic Metric"}}
+
+This is the scientific question:
+{question}
+
+The key scientific concept:""",
+        "scua_default": """Given a scientific question, you should show the key scientific concept related to this scientific question.
+This is a scientific question:
+{question}
+You should only output in a parsible JSON format. The example outputs look like:
+
+{{"key_scientific_concept": "The_key_scientific_concept"}}
+
+The key scientific concept:""",
+    },
+    "free_form_analogy": {
+        "cot_600_words": """Please provide a concise, conceptually informative explanation of the following academic concept in no more than 600 words.
+
+Concept: {concept}
+
+Requirements:
+
+1. Explain the concept at a broad, introductory level, focusing on its general meaning, central idea, and overall importance within its field.
+
+2. Use discipline-appropriate language, but avoid highly specific technical details that could function as clues to a particular test question.
+
+3. Focus on general conceptual understanding rather than equations, formulas, calculations, numerical values, thresholds, named laws, named theories, specific classifications, diagnostic criteria, or detailed derivations.
+
+4. Do not list or separately identify specific mechanisms, components, stages, pathways, variables, conditions, exceptions, characteristics, or consequences when those details could distinguish between closely related alternatives.
+
+5. Avoid stating relationships, contrasts, modifications, causes, effects, or defining features with enough specificity that they could directly determine the answer to a multiple-choice question.
+
+6. When the concept contains several subcomponents or processes, describe them only at a high level rather than enumerating or defining them individually.
+
+7. Do NOT use analogies, metaphors, worked examples, case examples, or hypothetical scenarios.
+
+8. Do not provide problem-solving steps, calculations, decision rules, elimination strategies, or instructions for applying the concept to a specific question.
+
+9. Do not infer, reconstruct, mention, or discuss any unseen question, answer choices, correct answer, or likely assessment context.
+
+10. The explanation must be self-contained and educational, but intentionally remain at a general conceptual level.
+
+11. Keep the explanation strictly under 600 words.
+
+Explanation:
+""",
+        "cot_300_words": """Please provide a clear, step-by-step chain of thought explanation with no more than 300 words to explain the core mechanisms and principles of the scientific concept: {concept}
+
+Requirements:
+1. Explain the underlying principles, logical steps, and scientific mechanisms directly.
+2. Do NOT use analogies or metaphors.
+3. Keep the total explanation strictly under 300 words.
+
+Chain of Thought:""",
+        "free_form_600_words": """Please use an analogy with no more than 600 words to explain the scientific concept: {concept}
+Analogy""",
+        "two_analogies_300w_each": """Please provide 2 distinct and separate analogies from two different everyday domains to explain the scientific concept: {concept}
+
+Requirements:
+1. Each analogy must be completely distinct from the other (using different scenarios/mechanisms).
+2. Each individual analogy must be no more than 300 words (maximum 600 words total).
+3. Clearly format your output with "Analogy 1:" and "Analogy 2:".
+
+Analogies:""",
+        "three_analogies_200w_each": """Please provide 3 distinct and separate analogies from three different everyday domains to explain the scientific concept: {concept}
+
+Requirements:
+1. Each analogy must be completely distinct from the others (using different everyday domains/mechanisms).
+2. Each individual analogy must be no more than 200 words (maximum 600 words total).
+3. Clearly format your output with "Analogy 1:", "Analogy 2:", and "Analogy 3:".
+
+Analogies:""",
+        "scua_default": """Please use an analogy with no more than 300 words to explain the scientific concept: {concept}
+Analogy""",
+    },
 }
 
 
@@ -50,27 +142,10 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _response_schema(name: str, field: str) -> dict:
-    return {
-        "type": "json_schema",
-        "json_schema": {
-            "name": name,
-            "strict": True,
-            "schema": {
-                "type": "object",
-                "properties": {field: {"type": "string"}},
-                "required": [field],
-                "additionalProperties": False,
-            },
-        },
-    }
-
-
-def openrouter_json(
+def openrouter_text(
     *,
     api_key: str,
     prompt: str,
-    field: str,
     model: str = TEACHER_MODEL_ID,
     provider: str | None = None,
     temperature: float = 0.0,
@@ -78,10 +153,9 @@ def openrouter_json(
     timeout_seconds: float = 180.0,
     max_retries: int = 4,
 ) -> dict:
-    """Request one JSON object, retrying transient failures and format fallback."""
-    format_modes = ("json_schema", "json_object", "text")
+    """Call DeepSeek through OpenRouter without changing the user prompt."""
     errors = []
-    for format_mode in format_modes:
+    for attempt in range(max_retries + 1):
         body = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
@@ -91,11 +165,6 @@ def openrouter_json(
         }
         if provider:
             body["provider"] = {"only": [provider], "allow_fallbacks": False, "require_parameters": False}
-        if format_mode == "json_schema":
-            body["response_format"] = _response_schema("teacher_output", field)
-        elif format_mode == "json_object":
-            body["response_format"] = {"type": "json_object"}
-
         request = urllib.request.Request(
             OPENROUTER_URL,
             data=json.dumps(body).encode("utf-8"),
@@ -107,103 +176,73 @@ def openrouter_json(
             },
             method="POST",
         )
-        for attempt in range(max_retries + 1):
-            try:
-                started = time.perf_counter()
-                with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
-                    payload = json.loads(response.read().decode("utf-8"))
-                latency = time.perf_counter() - started
-                message = payload["choices"][0]["message"]
-                raw = message.get("content") or ""
-                if isinstance(raw, list):
-                    raw = "".join(str(part.get("text", "")) if isinstance(part, dict) else str(part) for part in raw)
-                candidate = str(raw).strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-                parsed = json.loads(candidate)
-                value = str(parsed[field]).strip()
-                if not value:
-                    raise ValueError(f"Empty {field}")
-                return {
-                    "value": value,
-                    "raw_response": str(raw),
-                    "response_id": payload.get("id"),
-                    "response_model": payload.get("model"),
-                    "actual_provider": payload.get("provider"),
-                    "usage": payload.get("usage", {}),
-                    "latency_seconds": round(latency, 3),
-                    "response_format_mode": format_mode,
-                }
-            except urllib.error.HTTPError as exc:
-                detail = exc.read().decode("utf-8", "replace")[:2000]
-                errors.append(f"{format_mode}: HTTP {exc.code}: {detail}")
-                if exc.code in {400, 404, 422}:
-                    break
-                if exc.code not in {408, 409, 429, 500, 502, 503, 504} or attempt == max_retries:
-                    raise RuntimeError(errors[-1]) from exc
-            except (urllib.error.URLError, TimeoutError) as exc:
-                errors.append(f"{format_mode}: {exc}")
-                if attempt == max_retries:
-                    raise RuntimeError(errors[-1]) from exc
-            except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-                errors.append(f"{format_mode}: invalid output: {exc}")
-                break
-            time.sleep(min(30.0, 2**attempt + random.random()))
+        try:
+            started = time.perf_counter()
+            with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            latency = time.perf_counter() - started
+            message = payload["choices"][0]["message"]
+            raw = message.get("content") or ""
+            if isinstance(raw, list):
+                raw = "".join(str(part.get("text", "")) if isinstance(part, dict) else str(part) for part in raw)
+            clean = re.sub(r"<think>.*?</think>", "", str(raw), flags=re.DOTALL).strip()
+            if not clean:
+                raise ValueError("Empty response")
+            return {
+                "raw_response": clean,
+                "response_id": payload.get("id"),
+                "response_model": payload.get("model"),
+                "actual_provider": payload.get("provider"),
+                "usage": payload.get("usage", {}),
+                "latency_seconds": round(latency, 3),
+            }
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", "replace")[:2000]
+            errors.append(f"HTTP {exc.code}: {detail}")
+            if exc.code not in {408, 409, 429, 500, 502, 503, 504} or attempt == max_retries:
+                raise RuntimeError(errors[-1]) from exc
+        except (urllib.error.URLError, TimeoutError, KeyError, TypeError, ValueError) as exc:
+            errors.append(str(exc))
+            if attempt == max_retries:
+                raise RuntimeError(errors[-1]) from exc
+        time.sleep(min(30.0, 2**attempt + random.random()))
     raise RuntimeError("; ".join(errors[-3:]))
 
 
 def concept_prompt(row: dict, mode: str) -> str:
-    if mode == "detailed":
-        instruction = (
-            "Identify the precise scientific concept or linked concepts needed to solve the question. "
-            "Include the specific mechanism, law, or calculation involved in one compact sentence."
-        )
-    elif mode == "compact":
-        instruction = (
-            "Name only the single most central scientific concept, using a concise textbook-style label "
-            "of at most 12 words. Do not solve the question."
-        )
-    else:
+    prompt_key = {"detailed": "scua_default", "compact": "concise_word_limited"}.get(mode)
+    if prompt_key is None:
         raise ValueError(f"Unknown concept mode: {mode}")
-    return f"""
-{instruction}
-
-Question:
-{row['question_stem']}
-
-Options:
-{row['choices']}
-
-Return only JSON in this form:
-{{"scientific_concept": "..."}}
-""".strip()
+    return PROMPT_REGISTRY["concept_extraction"][prompt_key].format(question=row["question_stem"])
 
 
 def teaching_prompt(concept: str, condition_id: int) -> str:
-    spec = CONDITION_SPECS[condition_id]
-    if spec["kind"] == "analogy" and spec["count"] == 1:
-        request = (
-            f"Create one accurate, intuitive analogy of no more than {spec['word_limit']} words "
-            "that explains the concept to a learner. Clearly map the analogy back to the science."
-        )
-    elif spec["kind"] == "analogy":
-        request = (
-            f"Create exactly {spec['count']} distinct analogies. Each analogy must be no more than "
-            f"{spec['word_limit']} words, use a genuinely different source situation, and clearly map "
-            "its parts back to the science. Label them Analogy 1, Analogy 2, and so on."
-        )
-    else:
-        request = (
-            f"Give a direct, self-contained scientific explanation of no more than {spec['word_limit']} "
-            "words. Explain the mechanism and important relationships clearly. Do not use an analogy, "
-            "do not mention answer choices, and do not state a final multiple-choice answer."
-        )
-    return f"""
-{request}
+    prompt_key = CONDITION_SPECS[condition_id]["prompt_key"]
+    return PROMPT_REGISTRY["free_form_analogy"][prompt_key].format(concept=concept)
 
-Scientific concept: {concept}
 
-Return only JSON in this form:
-{{"teaching_content": "..."}}
-""".strip()
+def parse_extracted_concept(raw_output: str) -> str:
+    """Verbatim parsing behavior from analogygenerationoriginal.ipynb."""
+    if not raw_output:
+        return ""
+    try:
+        data = json.loads(raw_output)
+        if isinstance(data, dict) and "key_scientific_concept" in data:
+            return str(data["key_scientific_concept"]).strip()
+    except Exception:
+        pass
+    json_match = re.search(r'"key_scientific_concept"\s*:\s*"([^"]+)"', raw_output, re.DOTALL)
+    if json_match:
+        return json_match.group(1).strip()
+    code_block_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_output, re.DOTALL)
+    if code_block_match:
+        try:
+            data = json.loads(code_block_match.group(1))
+            if "key_scientific_concept" in data:
+                return str(data["key_scientific_concept"]).strip()
+        except Exception:
+            pass
+    return raw_output.strip(" \t\n\r\"'{}[]`")
 
 
 def _successful_latest(path: Path, key_field: str) -> dict[str, dict]:
@@ -258,19 +297,21 @@ def generate_concepts(
 
     def worker(job: dict) -> dict:
         try:
-            response = openrouter_json(
+            response = openrouter_text(
                 api_key=api_key,
                 provider=provider,
                 prompt=concept_prompt(job["row"], job["mode"]),
-                field="scientific_concept",
                 max_tokens=512,
             )
+            clean_concept = parse_extracted_concept(response["raw_response"])
+            if not clean_concept:
+                raise ValueError("Missing parsed scientific concept")
             record = {
                 "record_type": "concept",
                 "request_key": job["request_key"],
                 "id": job["row"]["id"],
                 "concept_mode": job["mode"],
-                "scientific_concept": response.pop("value"),
+                "scientific_concept": clean_concept,
                 **response,
                 "completed_at_utc": _utc_now(),
                 "error": None,
@@ -311,14 +352,13 @@ def generate_condition(
 
     def worker(job: dict) -> dict:
         try:
-            response = openrouter_json(
+            response = openrouter_text(
                 api_key=api_key,
                 provider=provider,
                 prompt=teaching_prompt(job["concept"]["scientific_concept"], condition_id),
-                field="teaching_content",
-                max_tokens=2048 if condition_id not in {2, 3, 4, 6} else 4096,
+                max_tokens=spec["max_tokens"],
             )
-            content = response.pop("value")
+            content = response["raw_response"]
             record = {
                 "record_type": "teacher_content",
                 "request_key": job["request_key"],
