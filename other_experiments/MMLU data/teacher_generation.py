@@ -36,6 +36,14 @@ TEACHER_MODEL_ID = "deepseek/deepseek-v4-flash-0731"
 TEACHER_LABEL = "deepseek-v4-flash"
 RANDOM_ANALOGY_SEED = 42
 
+
+def _default_teacher_label(model_id: str) -> str:
+    """Extract a clean short label from a model ID."""
+    name = model_id.split("/")[-1]
+    name = re.sub(r"-0731$", "", name)
+    return name
+
+
 CONDITION_SPECS = {
     0: {"concept_mode": "detailed", "kind": "analogy", "word_limit": 300, "count": 1, "prompt_key": "scua_default", "max_tokens": 512},
     1: {"concept_mode": "compact", "kind": "analogy", "word_limit": 300, "count": 1, "prompt_key": "scua_default", "max_tokens": 512},
@@ -282,6 +290,7 @@ def generate_concepts(
     *,
     modes: Iterable[str],
     api_key: str,
+    model: str = TEACHER_MODEL_ID,
     provider: str | None,
     concurrency: int,
 ) -> dict[str, dict]:
@@ -299,6 +308,7 @@ def generate_concepts(
         try:
             response = openrouter_text(
                 api_key=api_key,
+                model=model,
                 provider=provider,
                 prompt=concept_prompt(job["row"], job["mode"]),
                 max_tokens=512,
@@ -310,6 +320,7 @@ def generate_concepts(
                 "record_type": "concept",
                 "request_key": job["request_key"],
                 "id": job["row"]["id"],
+                "teacher_model": model,
                 "concept_mode": job["mode"],
                 "scientific_concept": clean_concept,
                 **response,
@@ -320,6 +331,7 @@ def generate_concepts(
             record = {
                 "record_type": "concept", "request_key": job["request_key"],
                 "id": job["row"]["id"], "concept_mode": job["mode"],
+                "teacher_model": model,
                 "completed_at_utc": _utc_now(), "error": f"{type(exc).__name__}: {exc}",
             }
         with append_lock:
@@ -336,6 +348,7 @@ def generate_condition(
     concepts: dict[str, dict],
     *,
     api_key: str,
+    model: str = TEACHER_MODEL_ID,
     provider: str | None,
     concurrency: int,
 ) -> dict[str, dict]:
@@ -354,6 +367,7 @@ def generate_condition(
         try:
             response = openrouter_text(
                 api_key=api_key,
+                model=model,
                 provider=provider,
                 prompt=teaching_prompt(job["concept"]["scientific_concept"], condition_id),
                 max_tokens=spec["max_tokens"],
@@ -364,6 +378,7 @@ def generate_condition(
                 "request_key": job["request_key"],
                 "condition_id": condition_id,
                 "id": job["row"]["id"],
+                "teacher_model": model,
                 "scientific_concept": job["concept"]["scientific_concept"],
                 "raw_concept_output": job["concept"]["raw_response"],
                 "teaching_content": content,
@@ -375,6 +390,7 @@ def generate_condition(
             record = {
                 "record_type": "teacher_content", "request_key": job["request_key"],
                 "condition_id": condition_id, "id": job["row"]["id"],
+                "teacher_model": model,
                 "completed_at_utc": _utc_now(), "error": f"{type(exc).__name__}: {exc}",
             }
         with append_lock:
@@ -385,7 +401,13 @@ def generate_condition(
     return _successful_latest(path, "request_key")
 
 
-def materialize_condition(condition_id: int, source_rows: list[dict], records: dict[str, dict]) -> Path:
+def materialize_condition(
+    condition_id: int,
+    source_rows: list[dict],
+    records: dict[str, dict],
+    *,
+    teacher_label: str = TEACHER_LABEL,
+) -> Path:
     spec = CONDITION_SPECS[condition_id]
     content_column = "free_form_analogy" if spec["kind"] == "analogy" else "chain_of_thought_explanation"
     output = []
@@ -406,7 +428,7 @@ def materialize_condition(condition_id: int, source_rows: list[dict], records: d
                 "is_defective": defective,
                 "defect_reason": f"word count {word_count} exceeds expected total {maximum}" if defective else "",
                 "generation_status": "generated" if not defective else "generated_needs_review",
-                "teacher_model": TEACHER_LABEL,
+                "teacher_model": teacher_label,
             }
         )
     fieldnames = BASE_COLUMNS[:6] + [content_column] + BASE_COLUMNS[6:] + ["source_index"]
@@ -486,6 +508,8 @@ def run_generation_pipeline(
     num_rows: int | None = None,
     start_row: int = 0,
     concurrency: int = 20,
+    teacher_model: str = TEACHER_MODEL_ID,
+    teacher_label: str | None = None,
     provider: str | None = None,
     force_dataset_download: bool = False,
     random_seed: int = RANDOM_ANALOGY_SEED,
@@ -506,16 +530,36 @@ def run_generation_pipeline(
     if invalid:
         raise KeyError(f"Unknown generation conditions: {invalid}")
 
+    effective_label = teacher_label or _default_teacher_label(teacher_model)
     modes = sorted({CONDITION_SPECS[value]["concept_mode"] for value in generation_ids})
-    concepts = generate_concepts(rows, modes=modes, api_key=api_key, provider=provider, concurrency=concurrency)
+    concepts = generate_concepts(
+        rows,
+        modes=modes,
+        api_key=api_key,
+        model=teacher_model,
+        provider=provider,
+        concurrency=concurrency,
+    )
     files = {}
     missing_by_condition = {}
     for condition_id in generation_ids:
         records = generate_condition(
-            condition_id, rows, concepts,
-            api_key=api_key, provider=provider, concurrency=concurrency,
+            condition_id,
+            rows,
+            concepts,
+            api_key=api_key,
+            model=teacher_model,
+            provider=provider,
+            concurrency=concurrency,
         )
-        files[condition_id] = str(materialize_condition(condition_id, rows, records))
+        files[condition_id] = str(
+            materialize_condition(
+                condition_id,
+                rows,
+                records,
+                teacher_label=effective_label,
+            )
+        )
         missing_by_condition[condition_id] = [
             row["id"] for row in rows if f"c{condition_id}:{row['id']}" not in records
         ]
@@ -540,7 +584,8 @@ def run_generation_pipeline(
             for condition_id, missing in missing_by_condition.items()
             if missing
         },
-        "teacher_model": TEACHER_MODEL_ID,
+        "teacher_model": teacher_model,
+        "teacher_label": effective_label,
         "provider": provider,
     }
 
