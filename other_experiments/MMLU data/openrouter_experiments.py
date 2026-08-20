@@ -124,6 +124,8 @@ def call_student(
                     latency = time.perf_counter() - started
                     message = payload["choices"][0]["message"]
                     raw = _content_text(message.get("content"))
+                    if not raw.strip():
+                        raw = _content_text(message.get("reasoning") or message.get("reasoning_content"))
                     parsed = parse_student_answer(raw, task["condition_id"])
                     attempts.append({"provider": provider, "format": format_mode, "status": "success"})
                     return {
