@@ -18,12 +18,18 @@ CONDITION_FILES = {
     7: "7_GPQA_same_domain_random_analogy.csv",
     8: "8_GPQA_cross_domain_random_analogy.csv",
     20: "20_GPQA_cot_baseline_no_external_teaching",
+    21: "21_GPQA_self_analogy_no_external_teaching",
 }
 
-# Condition 20 is a prompt-only baseline. It uses the aligned GPQA questions
-# from condition 0 but does not expose that condition's analogy to the student.
+# Conditions 20 and 21 are prompt-only controls. They use the aligned GPQA
+# questions from condition 0 without exposing its teacher analogy.
 COT_BASELINE_CONDITION_ID = 20
-COT_BASELINE_SOURCE_FILE = CONDITION_FILES[0]
+SELF_ANALOGY_CONDITION_ID = 21
+PROMPT_ONLY_CONDITION_IDS = {
+    COT_BASELINE_CONDITION_ID,
+    SELF_ANALOGY_CONDITION_ID,
+}
+PROMPT_ONLY_SOURCE_FILE = CONDITION_FILES[0]
 
 
 def _teaching_content(row: dict[str, str]) -> tuple[str, str]:
@@ -62,8 +68,8 @@ def load_tasks(
         if condition_id not in CONDITION_FILES:
             raise KeyError(f"Unknown condition ID: {condition_id}")
         source_filename = (
-            COT_BASELINE_SOURCE_FILE
-            if condition_id == COT_BASELINE_CONDITION_ID
+            PROMPT_ONLY_SOURCE_FILE
+            if condition_id in PROMPT_ONLY_CONDITION_IDS
             else CONDITION_FILES[condition_id]
         )
         path = repo_root / "content conditions" / source_filename
@@ -79,9 +85,9 @@ def load_tasks(
 
         for row_id in selected_ids:
             row = by_id[row_id]
-            if condition_id == COT_BASELINE_CONDITION_ID:
+            if condition_id in PROMPT_ONLY_CONDITION_IDS:
                 content_column, content = None, ""
-                condition_file = "20_GPQA_cot_baseline_no_external_teaching"
+                condition_file = CONDITION_FILES[condition_id]
             else:
                 content_column, content = _teaching_content(row)
                 condition_file = path.name

@@ -10,6 +10,8 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from .conditions import COT_BASELINE_CONDITION_ID, SELF_ANALOGY_CONDITION_ID
+
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -148,7 +150,7 @@ def parse_cot_answer(text: str) -> dict[str, str]:
 
 def parse_task_answer(text: str, condition_id: int | None) -> dict[str, str]:
     """Use the parser appropriate for a condition's required output format."""
-    if condition_id == 20:
+    if condition_id in {COT_BASELINE_CONDITION_ID, SELF_ANALOGY_CONDITION_ID}:
         return parse_cot_answer(text)
     return parse_student_answer(text)
 
@@ -222,7 +224,7 @@ def chat_completion(
         }
         # Appendix C.4's CoT baseline is deliberately free-form. Do not impose
         # provider-side JSON formatting, which would change the paper prompt.
-        if condition_id == 20:
+        if condition_id in {COT_BASELINE_CONDITION_ID, SELF_ANALOGY_CONDITION_ID}:
             pass
         elif response_format_mode == "json_schema":
             body["response_format"] = schema

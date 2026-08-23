@@ -143,7 +143,7 @@ def _compact(path: Path, metadata: dict, tasks: list[dict], results: dict[str, d
 def run_local_experiments(
     *,
     model_config: ModelConfig,
-    condition_ids: int | Iterable[int] = tuple(range(9)) + (20,),
+    condition_ids: int | Iterable[int] = tuple(range(9)) + (20, 21),
     num_rows: int | None = None,
     start_row: int = 0,
     batch_size: int = 8,
