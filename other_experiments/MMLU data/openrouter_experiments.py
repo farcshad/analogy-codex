@@ -87,7 +87,11 @@ def call_student(
     attempts = []
     last_error = None
     for provider in provider_candidates:
-        formats = ("text",) if task["condition_id"] == 20 else ("json_schema", "json_object", "text")
+        formats = (
+            ("text",)
+            if task["condition_id"] in {20, 21}
+            else ("json_schema", "json_object", "text")
+        )
         for format_mode in formats:
             body = {
                 "model": model,
@@ -194,7 +198,7 @@ def _compact(path: Path, metadata: dict, tasks: list[dict], latest: dict[str, di
 def run_openrouter_experiments(
     *,
     student_model: str,
-    condition_ids: int | Iterable[int] = tuple(range(9)) + (20,),
+    condition_ids: int | Iterable[int] = tuple(range(9)) + (20, 21),
     num_rows: int | None = None,
     start_row: int = 0,
     provider: str | Iterable[str] | None = None,

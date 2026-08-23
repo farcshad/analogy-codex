@@ -1,4 +1,4 @@
-"""Run the existing seven SCUA conditions against one local GPU model."""
+"""Run the GPQA/SCUA conditions against one local GPU model."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ class ExperimentConfig:
     num_rows: int | None = 1
     start_row: int = 0
     batch_size: int = 1
-    max_new_tokens: int = 1024
+    max_new_tokens: int = 2048
     temperature: float = 0.0
     top_p: float = 0.95
     enable_thinking: bool = False

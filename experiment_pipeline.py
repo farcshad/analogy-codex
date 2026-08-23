@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
-from student_eval.conditions import load_tasks
+from student_eval.conditions import PROMPT_ONLY_CONDITION_IDS, load_tasks
 from student_eval.openrouter import OpenRouterError, chat_completion
 from student_eval.postprocess import repair_result_row
 from student_eval.prompting import build_scua_prompt
@@ -526,7 +526,7 @@ def _run_single_condition(
                 provider_exc = None
                 response_formats = (
                     ("text",)
-                    if task["condition_id"] == 20
+                    if task["condition_id"] in PROMPT_ONLY_CONDITION_IDS
                     else provider_router.response_formats(selected_provider)
                 )
                 for response_format_mode in response_formats:

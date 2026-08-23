@@ -1,6 +1,6 @@
 # Local GPU experiments
 
-This folder runs the same seven GPQA/SCUA conditions as the API experiment,
+This folder runs the same GPQA/SCUA conditions as the API experiment,
 but performs inference directly with a Hugging Face model. The initial default
 is `Qwen/Qwen3-0.6B`. Nothing is downloaded or loaded merely by importing the
 package; loading begins only when `load_model()` or `run_experiment()` is called.
@@ -21,6 +21,12 @@ Run a one-row smoke test:
 
 ```bash
 python -m gpu_experiments.run --conditions 0 --num-rows 1 --batch-size 1
+```
+
+Run a one-row self-analogy smoke test:
+
+```bash
+python -m gpu_experiments.run --conditions 21 --num-rows 1 --batch-size 1 --max-new-tokens 2048
 ```
 
 Run ten aligned questions from every condition:
@@ -65,10 +71,14 @@ with or overwrites the non-thinking results.
 - Condition 20: no analogy or external explanation. It uses the SCUA paper's
   Appendix C.4 CoT baseline prompt verbatim and accepts a free-form reason
   followed by an explicit final answer.
+- Condition 21: no external explanation. The student first creates and maps one
+  analogy of no more than 600 words, then gives the usual concise reason of no
+  more than 120 words and an explicit final answer. Use at least 2048 maximum
+  new tokens for this condition.
 
 Conditions 7 and 8 preserve the source question, source domain, assignment
-condition, and shuffle seed in every result row for auditing. Condition 20 uses
-the same aligned GPQA question IDs as the other conditions.
+condition, and shuffle seed in every result row for auditing. Conditions 20 and
+21 use the same aligned GPQA question IDs as the other conditions.
 
 ## Useful loader options
 

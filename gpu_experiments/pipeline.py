@@ -523,7 +523,7 @@ def run_pipeline(
     start_row: int = 0,
     temperature: float = 0.0,
     top_p: float = 0.95,
-    max_new_tokens: int = 1024,
+    max_new_tokens: int = 2048,
     enable_thinking: bool = False,
     retry_failed: bool = True,
     show_progress: bool = True,

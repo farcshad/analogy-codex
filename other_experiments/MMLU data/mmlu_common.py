@@ -34,6 +34,13 @@ CONDITION_FILES = {
     8: "8_MMLU_cross_domain_random_analogy.csv",
 }
 
+COT_BASELINE_CONDITION_ID = 20
+SELF_ANALOGY_CONDITION_ID = 21
+PROMPT_ONLY_CONDITION_IDS = {
+    COT_BASELINE_CONDITION_ID,
+    SELF_ANALOGY_CONDITION_ID,
+}
+
 BASE_COLUMNS = [
     "id", "question_stem", "choices", "answer_key", "scientific_concept",
     "raw_concept_output", "is_defective", "defect_reason",
@@ -170,7 +177,7 @@ def load_tasks(
     tasks: list[dict] = []
 
     for condition_id in condition_ids:
-        source_id = 0 if condition_id == 20 else condition_id
+        source_id = 0 if condition_id in PROMPT_ONLY_CONDITION_IDS else condition_id
         if source_id not in CONDITION_FILES:
             raise KeyError(f"Unknown condition: {condition_id}")
         path = CONDITION_DIR / CONDITION_FILES[source_id]
@@ -183,9 +190,13 @@ def load_tasks(
             raise ValueError(f"Condition {condition_id} is missing {len(missing)} selected IDs")
         for row_id in selected_ids:
             row = by_id[row_id]
-            if condition_id == 20:
+            if condition_id in PROMPT_ONLY_CONDITION_IDS:
                 content_column, content = None, ""
-                condition_file = "20_MMLU_cot_baseline_no_external_teaching"
+                condition_file = (
+                    "20_MMLU_cot_baseline_no_external_teaching"
+                    if condition_id == COT_BASELINE_CONDITION_ID
+                    else "21_MMLU_self_analogy_no_external_teaching"
+                )
             else:
                 content_column, content = _teaching_content(row)
                 condition_file = path.name
@@ -215,10 +226,16 @@ def load_tasks(
 
 
 def build_student_prompt(task: dict) -> str:
-    if task["condition_id"] == 20:
+    if task["condition_id"] == COT_BASELINE_CONDITION_ID:
         return (
             f"{task['question_stem']}\n{task['choices']}\n"
             "You need to give a brief, concise reason first (no more than 80 words) and then state your final answer choice (e.g. Answer: A).\nAnswer:"
+        )
+    if task["condition_id"] == SELF_ANALOGY_CONDITION_ID:
+        return (
+            f"{task['question_stem']}\n{task['choices']}\n"
+            "First, create one familiar analogy of no more than 600 words that captures the central mechanism or relationship in the question. State how the important parts of the analogy map to the original problem.\n\n"
+            "Then solve the original question. Give a concise reason of no more than 120 words, using the analogy when helpful and checking the result with the original scientific facts or calculations. If the analogy does not fit a detail, do not force it. Finally, state your answer choice (e.g. Answer: A).\nAnswer:"
         )
     return f"""
 You need to select the best answer for a multiple-choice scientific question.
