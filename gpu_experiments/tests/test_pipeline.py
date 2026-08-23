@@ -85,6 +85,24 @@ class LocalPipelineTests(unittest.TestCase):
         self.assertEqual(parsed["choice"], "B")
         self.assertEqual(parsed["parse_method"], "explicit_cot_answer")
 
+    def test_condition_21_uses_self_analogy_prompt_without_teaching(self):
+        task = load_tasks(self.repo_root, (21,), num_rows=1)[0]
+        prompt = build_scua_prompt(task)
+
+        self.assertEqual(task["teaching_content"], "")
+        self.assertIn("analogy of no more than 600 words", prompt)
+        self.assertIn("reason of no more than 120 words", prompt)
+        self.assertTrue(prompt.endswith("Answer:"))
+        self.assertNotIn("Teacher explanation", prompt)
+
+        parsed = parse_task_answer(
+            "Analogy: a pipe carrying water. Mapping: flow represents current. "
+            "Reason: the relationship selects the second option. Answer: B",
+            21,
+        )
+        self.assertEqual(parsed["choice"], "B")
+        self.assertEqual(parsed["parse_method"], "explicit_cot_answer")
+
     def test_multiple_conditions_write_separate_resumable_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             output_root = Path(temporary)

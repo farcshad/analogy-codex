@@ -21,7 +21,7 @@ def main() -> None:
     parser.add_argument("--num-rows", type=int, default=1)
     parser.add_argument("--start-row", type=int, default=0)
     parser.add_argument("--batch-size", type=int, default=1)
-    parser.add_argument("--max-new-tokens", type=int, default=1024)
+    parser.add_argument("--max-new-tokens", type=int, default=2048)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--dtype", default="bfloat16")
     parser.add_argument("--device-map", default="auto")
